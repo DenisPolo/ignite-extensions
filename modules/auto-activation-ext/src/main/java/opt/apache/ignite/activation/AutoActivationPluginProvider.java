@@ -72,7 +72,7 @@ public class AutoActivationPluginProvider implements PluginProvider<PluginConfig
 
     /** {@inheritDoc} */
     @Override public String version() {
-        return "1.0";
+        return "1.0.0-SNAPSHOT";
     }
 
     /** {@inheritDoc} */
@@ -111,7 +111,7 @@ public class AutoActivationPluginProvider implements PluginProvider<PluginConfig
 
         IgniteCluster cluster = grid.cluster();
 
-        if (cluster.state() == ClusterState.ACTIVE) {
+        if (cluster.state() == ClusterState.ACTIVE || cluster.state() == ClusterState.ACTIVE_READ_ONLY) {
             if (logger.isInfoEnabled())
                 logger.info("Auto activation skipped - cluster already activated");
 

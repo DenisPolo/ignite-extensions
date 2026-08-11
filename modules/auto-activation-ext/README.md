@@ -2,10 +2,11 @@ Apache Ignite Auto Activation Plugin
 ------------------------------------
 Apache Ignite Auto Activation plugin enables cluster activation at startup, subject to configured conditions.
 
-Plugin skip cluster activation in any of next cases:
+The plugin skips cluster activation in any of next cases:
 
-- Cluster state is ACTIVE
+- Cluster state is ACTIVE or ACTIVE_READ_ONLY
 - Cluster baseline is not empty
+- `condition` contains any client node
 
 Depending on how you use Ignite, you can an extension using one of the following methods:
 
@@ -26,8 +27,7 @@ Importing Auto Activation Plugin In Maven Project
 -------------------------------------------------
 
 If you are using Maven to manage dependencies of your project, you can add Auto Activation Plugin module
-dependency like this (replace '${ignite.version}' with actual Ignite version you are
-interested in):
+dependency like this:
 
 ```xml
 
@@ -43,7 +43,7 @@ http://maven.apache.org/xsd/maven-4.0.0.xsd">
         <dependency>
             <groupId>org.apache.ignite</groupId>
             <artifactId>ignite-auto-activation-ext</artifactId>
-            <version>${ignite-auto-activation-ext.version}</version>
+            <version>1.0.0-SNAPSHOT</version>
         </dependency>
         ...
     </dependencies>
@@ -75,15 +75,18 @@ where "condition" can be one of the following beans:
     </constructor-arg>
 </bean>
 ```
+where `server-0` and `server-1` are consistent ID's of required server nodes in the activated cluster
+
 or
 ```
 <bean id="condition" class="opt.apache.ignite.activation.ActivateByNodeAttribute">
     <constructor-arg name="attributeName" value="ATTR"/>
     <constructor-arg name="requiredValues">
         <util:set>
-            <value>server-0</value>
-            <value>server-1</value>
+            <value>attribute-0</value>
+            <value>attribute-1</value>
         </util:set>
     </constructor-arg>
 </bean>
 ```
+where `attribute-0` and `attribute-1` are values of user-defined attribute `ATTR` that will be used to choose server nodes for cluster auto activation.

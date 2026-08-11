@@ -20,6 +20,7 @@ package opt.apache.ignite.activation;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import org.apache.ignite.IgniteException;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.lang.IgnitePredicate;
 
@@ -46,6 +47,11 @@ public class ActivateByConsistentID implements IgnitePredicate<Collection<Cluste
 
         for (ClusterNode node : nodes) {
             String nodeConsistentId = node.consistentId().toString();
+
+            if (missingNodes.contains(nodeConsistentId) && node.isClient()) {
+                throw new IgniteException("Auto-activation-plugin supports only server nodes. This node is client: ID "
+                        + node.consistentId() + ", IP " + node.addresses());
+            }
 
             missingNodes.remove(nodeConsistentId);
 

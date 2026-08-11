@@ -20,7 +20,7 @@ package opt.apache.ignite.activation;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
-
+import org.apache.ignite.IgniteException;
 import org.apache.ignite.cache.CacheAtomicityMode;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.cluster.ClusterState;
@@ -35,8 +35,11 @@ import org.apache.ignite.testframework.ListeningTestLogger;
 import org.apache.ignite.testframework.LogListener;
 import org.apache.ignite.testframework.junits.common.GridCommonAbstractTest;
 import org.junit.Test;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
 
 import static org.apache.ignite.cluster.ClusterState.ACTIVE;
+import static org.apache.ignite.cluster.ClusterState.ACTIVE_READ_ONLY;
 import static org.apache.ignite.cluster.ClusterState.INACTIVE;
 import static org.apache.ignite.testframework.GridTestUtils.assertThrows;
 
@@ -160,6 +163,13 @@ public class AutoActivationTest extends GridCommonAbstractTest {
                 .setBackups(0)
                 .setAtomicityMode(CacheAtomicityMode.TRANSACTIONAL)
                 .setIndexedTypes(String.class, Integer.class);
+    }
+
+    /** @return IgniteConfiguration from XML. */
+    private IgniteConfiguration getConfigurationFromXml(String xmlPath) throws Exception {
+        ApplicationContext ctx = new ClassPathXmlApplicationContext("common-ignite-server-node.xml", xmlPath);
+
+        return ctx.getBean(IgniteConfiguration.class).setGridLogger(listeningLog);
     }
 
     /** */
@@ -300,6 +310,24 @@ public class AutoActivationTest extends GridCommonAbstractTest {
             assertTrue(lsnrAlreadyAct.check());
             assertFalse(lsnrActMeet.check());
             assertEquals(node0.cluster().state(), ACTIVE);
+        }
+    }
+
+    /** */
+    @Test
+    public void testAlreadyActivatedInMemoryClusterActivationByConsistentIdActiveReadOnly() throws Exception {
+        PluginProvider<?> autoActivationProvider = new AutoActivationPluginProvider(
+                new ActivateByConsistentID(Set.of(NODE_0))
+        );
+
+        try (
+                IgniteEx node0 = startGrid(getConfiguration(NODE_0)
+                        .setClusterStateOnStart(ACTIVE_READ_ONLY)
+                        .setPluginProviders(autoActivationProvider))
+        ) {
+            assertTrue(lsnrAlreadyAct.check());
+            assertFalse(lsnrActMeet.check());
+            assertEquals(node0.cluster().state(), ACTIVE_READ_ONLY);
         }
     }
 
@@ -578,7 +606,7 @@ public class AutoActivationTest extends GridCommonAbstractTest {
 
     /** */
     @Test
-    public void testAssertionActivationByConsistentId() throws Exception {
+    public void testAssertionActivation() throws Exception {
         assertThrows(
                 listeningLog,
                 () -> startGrid(getConfiguration(NODE_0)
@@ -630,49 +658,75 @@ public class AutoActivationTest extends GridCommonAbstractTest {
 
     /** */
     @Test
+    public void testAssertionActivationByConsistentIdClientNode() throws Exception {
+        assertThrows(
+                listeningLog,
+                () -> {
+                    startGrid(getConfiguration(NODE_0)
+                            .setPluginProviders(new AutoActivationPluginProvider(new ActivateByConsistentID(Set.of(NODE_0, NODE_1)))));
+
+                    startGrid(getConfiguration(NODE_1)
+                            .setClientMode(true)
+                            .setPluginProviders(new AutoActivationPluginProvider(new ActivateByConsistentID(Set.of(NODE_0, NODE_1)))));
+                },
+                IgniteException.class,
+                "Auto-activation-plugin supports only server nodes. This node is client: ID "
+        );
+    }
+
+    /** */
+    @Test
+    public void testAssertionActivationByNodeAttributeClientNode() throws Exception {
+        assertThrows(
+                listeningLog,
+                () -> {
+                    startGrid(getConfiguration(NODE_0)
+                            .setUserAttributes(Map.of(ATTR, ATTR_VAL1))
+                            .setPluginProviders(new AutoActivationPluginProvider(
+                                    new ActivateByNodeAttribute(ATTR, Set.of(ATTR_VAL1, ATTR_VAL2))
+                            )));
+
+                    startGrid(getConfiguration(NODE_1)
+                            .setClientMode(true)
+                            .setUserAttributes(Map.of(ATTR, ATTR_VAL2))
+                            .setPluginProviders(new AutoActivationPluginProvider(
+                                    new ActivateByNodeAttribute(ATTR, Set.of(ATTR_VAL1, ATTR_VAL2))
+                            )));
+                },
+                IgniteException.class,
+                "Auto-activation-plugin supports only server nodes. This node is client: ID "
+        );
+    }
+
+    /** */
+    @Test
     public void testXmlCfgPersistenceClusterActivationByConsistentId() throws Exception {
-        try (
-                IgniteEx node0 =
-                        startGrid(loadConfiguration("activate-by-consistent-ID/ignite-server-node1.xml")
-                                .setGridLogger(listeningLog))
-        ) {
-            assertTrue(lsnrActNotMeet.check());
-            assertFalse(lsnrActMeet.check());
-            assertEquals(node0.cluster().state(), INACTIVE);
-
-            startGrid(loadConfiguration("activate-by-consistent-ID/ignite-server-node2.xml")
-                    .setGridLogger(listeningLog));
-
-            assertTrue(lsnrActNotMeet.check());
-            assertFalse(lsnrActMeet.check());
-            assertEquals(node0.cluster().state(), INACTIVE);
-
-            startGrid(loadConfiguration("activate-by-consistent-ID/ignite-server-node3.xml")
-                    .setGridLogger(listeningLog));
-
-            assertTrue(lsnrActMeet.check());
-            assertEquals(node0.cluster().state(), ACTIVE);
-        }
+        executeXmlTest("activate-by-consistent-ID");
     }
 
     /** */
     @Test
     public void testXmlCfgPersistenceClusterActivationByNodeAttribute() throws Exception {
+        executeXmlTest("activate-by-node-attribute");
+    }
+
+    /** */
+    private void executeXmlTest(String conditionType) throws Exception {
         try (
-                IgniteEx node0 = startGrid(loadConfiguration("activate-by-node-attribute/ignite-server-node1.xml")
-                .setGridLogger(listeningLog))
+                IgniteEx node0 =
+                        startGrid(getConfigurationFromXml(conditionType + "/ignite-server-node1.xml"))
         ) {
             assertTrue(lsnrActNotMeet.check());
             assertFalse(lsnrActMeet.check());
             assertEquals(node0.cluster().state(), INACTIVE);
 
-            startGrid(loadConfiguration("activate-by-node-attribute/ignite-server-node2.xml").setGridLogger(listeningLog));
+            startGrid(getConfigurationFromXml(conditionType + "/ignite-server-node2.xml"));
 
             assertTrue(lsnrActNotMeet.check());
             assertFalse(lsnrActMeet.check());
             assertEquals(node0.cluster().state(), INACTIVE);
 
-            startGrid(loadConfiguration("activate-by-node-attribute/ignite-server-node3.xml").setGridLogger(listeningLog));
+            startGrid(getConfigurationFromXml(conditionType + "/ignite-server-node3.xml"));
 
             assertTrue(lsnrActMeet.check());
             assertEquals(node0.cluster().state(), ACTIVE);
