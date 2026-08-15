@@ -20,10 +20,8 @@ package opt.apache.ignite.activation;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
-import org.apache.ignite.IgniteException;
 import org.apache.ignite.cache.CacheAtomicityMode;
 import org.apache.ignite.cache.CacheMode;
-import org.apache.ignite.cluster.ClusterState;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
@@ -44,7 +42,7 @@ import static org.apache.ignite.cluster.ClusterState.INACTIVE;
 import static org.apache.ignite.testframework.GridTestUtils.assertThrows;
 
 /**
- * {@link AutoActivationPluginProvider} test
+ * Tests {@link AutoActivationPluginProvider}.
  */
 public class AutoActivationTest extends GridCommonAbstractTest {
     /** Listening test logger. */
@@ -114,28 +112,10 @@ public class AutoActivationTest extends GridCommonAbstractTest {
 
     /** {@inheritDoc} */
     @Override protected IgniteConfiguration getConfiguration(String igniteInstanceName) throws Exception {
-        final IgniteConfiguration igniteConfiguration = super.getConfiguration(igniteInstanceName);
-
-        switch (igniteInstanceName) {
-            case NODE_0:
-                igniteConfiguration.setConsistentId(NODE_0);
-                break;
-
-            case NODE_1:
-                igniteConfiguration.setConsistentId(NODE_1);
-                break;
-
-            case NODE_2:
-                igniteConfiguration.setConsistentId(NODE_2);
-                break;
-
-            default: throw new IllegalArgumentException("Unknown node: " + igniteInstanceName);
-        }
-
-        igniteConfiguration.setClusterStateOnStart(ClusterState.INACTIVE);
-        igniteConfiguration.setGridLogger(listeningLog);
-
-        return igniteConfiguration;
+        return super.getConfiguration(igniteInstanceName)
+                    .setConsistentId(igniteInstanceName)
+                    .setClusterStateOnStart(INACTIVE)
+                    .setGridLogger(listeningLog);
     }
 
     /** @return DataStorageConfiguration. */
@@ -658,44 +638,66 @@ public class AutoActivationTest extends GridCommonAbstractTest {
 
     /** */
     @Test
-    public void testAssertionActivationByConsistentIdClientNode() throws Exception {
-        assertThrows(
-                listeningLog,
-                () -> {
-                    startGrid(getConfiguration(NODE_0)
-                            .setPluginProviders(new AutoActivationPluginProvider(new ActivateByConsistentID(Set.of(NODE_0, NODE_1)))));
-
-                    startGrid(getConfiguration(NODE_1)
-                            .setClientMode(true)
-                            .setPluginProviders(new AutoActivationPluginProvider(new ActivateByConsistentID(Set.of(NODE_0, NODE_1)))));
-                },
-                IgniteException.class,
-                "Auto-activation-plugin supports only server nodes. This node is client: ID "
+    public void testActivationConditionByConsistentIdNotMeetWithClientNode() throws Exception {
+        PluginProvider<?> autoActivationProvider = new AutoActivationPluginProvider(
+                new ActivateByConsistentID(nodesConsistentIds)
         );
+
+        try (
+                IgniteEx node0 = startGrid(getConfiguration(NODE_0)
+                        .setDataStorageConfiguration(getDataStorageConfiguration())
+                        .setPluginProviders(autoActivationProvider))
+        ) {
+            assertTrue(lsnrActNotMeet.check());
+            assertFalse(lsnrActMeet.check());
+            assertEquals(node0.cluster().state(), INACTIVE);
+
+            startGrid(getConfiguration(NODE_1)
+                    .setClientMode(true)
+                    .setDataStorageConfiguration(getDataStorageConfiguration())
+                    .setPluginProviders(autoActivationProvider));
+
+            assertTrue(lsnrActNotMeet.check());
+            assertFalse(lsnrActMeet.check());
+            assertEquals(node0.cluster().state(), INACTIVE);
+
+            startGrid(getConfiguration(NODE_2)
+                    .setDataStorageConfiguration(getDataStorageConfiguration())
+                    .setPluginProviders(autoActivationProvider));
+
+            assertTrue(lsnrActNotMeet.check());
+            assertFalse(lsnrActMeet.check());
+            assertEquals(node0.cluster().state(), INACTIVE);
+        }
     }
 
     /** */
     @Test
-    public void testAssertionActivationByNodeAttributeClientNode() throws Exception {
-        assertThrows(
-                listeningLog,
-                () -> {
-                    startGrid(getConfiguration(NODE_0)
-                            .setUserAttributes(Map.of(ATTR, ATTR_VAL1))
-                            .setPluginProviders(new AutoActivationPluginProvider(
-                                    new ActivateByNodeAttribute(ATTR, Set.of(ATTR_VAL1, ATTR_VAL2))
-                            )));
-
-                    startGrid(getConfiguration(NODE_1)
-                            .setClientMode(true)
-                            .setUserAttributes(Map.of(ATTR, ATTR_VAL2))
-                            .setPluginProviders(new AutoActivationPluginProvider(
-                                    new ActivateByNodeAttribute(ATTR, Set.of(ATTR_VAL1, ATTR_VAL2))
-                            )));
-                },
-                IgniteException.class,
-                "Auto-activation-plugin supports only server nodes. This node is client: ID "
+    public void testActivationConditionByNodeAttributeNotMeetWithClientNode() throws Exception {
+        PluginProvider<?> autoActivationProvider = new AutoActivationPluginProvider(
+                new ActivateByNodeAttribute(ATTR, Set.of(ATTR_VAL1, ATTR_VAL2))
         );
+
+        try (
+                IgniteEx node0 = startGrid(getConfiguration(NODE_0)
+                        .setDataStorageConfiguration(getDataStorageConfiguration())
+                        .setUserAttributes(Map.of(ATTR, ATTR_VAL1))
+                        .setPluginProviders(autoActivationProvider))
+        ) {
+            assertTrue(lsnrActNotMeet.check());
+            assertFalse(lsnrActMeet.check());
+            assertEquals(node0.cluster().state(), INACTIVE);
+
+            startGrid(getConfiguration(NODE_1)
+                    .setClientMode(true)
+                    .setDataStorageConfiguration(getDataStorageConfiguration())
+                    .setUserAttributes(Map.of(ATTR, ATTR_VAL2))
+                    .setPluginProviders(autoActivationProvider));
+
+            assertTrue(lsnrActNotMeet.check());
+            assertFalse(lsnrActMeet.check());
+            assertEquals(node0.cluster().state(), INACTIVE);
+        }
     }
 
     /** */

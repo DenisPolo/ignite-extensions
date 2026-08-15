@@ -2,13 +2,13 @@ Apache Ignite Auto Activation Plugin
 ------------------------------------
 Apache Ignite Auto Activation plugin enables cluster activation at startup, subject to configured conditions.
 
-The plugin skips cluster activation in any of next cases:
+The plugin skips cluster activation in the following cases:
 
-- Cluster state is ACTIVE or ACTIVE_READ_ONLY
-- Cluster baseline is not empty
-- `condition` contains any client node
+- Cluster state is either ACTIVE or ACTIVE_READ_ONLY
+- Cluster baseline topology is not empty
+- The required nodes list for cluster activation contains any client node
 
-Depending on how you use Ignite, you can an extension using one of the following methods:
+Depending on how you use Ignite, you can implement an extension using one of the following methods:
 
 - If you use the binary distribution, move the libs/{module-dir} to the 'libs' directory of the Ignite distribution before starting the node.
 - Add libraries from libs/{module-dir} to the classpath of your application.

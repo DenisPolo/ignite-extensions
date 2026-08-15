@@ -18,9 +18,8 @@
 package opt.apache.ignite.activation;
 
 import java.util.Collection;
-import java.util.LinkedHashSet;
+import java.util.HashSet;
 import java.util.Set;
-import org.apache.ignite.IgniteException;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.lang.IgnitePredicate;
 
@@ -51,15 +50,10 @@ public class ActivateByNodeAttribute implements IgnitePredicate<Collection<Clust
 
     /** {@inheritDoc} */
     @Override public boolean apply(Collection<ClusterNode> nodes) {
-        Set<String> missingNodes = new LinkedHashSet<>(requiredValues);
+        Set<String> missingNodes = new HashSet<>(requiredValues);
 
         for (ClusterNode node : nodes) {
             String attrVal = node.attribute(attrName);
-
-            if (missingNodes.contains(attrVal) && node.isClient()) {
-                throw new IgniteException("Auto-activation-plugin supports only server nodes. This node is client: ID "
-                        + node.consistentId() + ", IP " + node.addresses());
-            }
 
             missingNodes.remove(attrVal);
 

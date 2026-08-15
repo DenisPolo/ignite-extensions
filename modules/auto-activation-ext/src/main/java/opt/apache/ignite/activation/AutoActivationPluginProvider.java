@@ -36,7 +36,7 @@ import org.apache.ignite.plugin.PluginProvider;
 import org.apache.ignite.plugin.PluginValidationException;
 
 /**
- * Activate cluster when specified condition meet
+ * Activate cluster when specified condition meet.
  */
 public class AutoActivationPluginProvider implements PluginProvider<PluginConfiguration> {
     /** */
@@ -77,7 +77,7 @@ public class AutoActivationPluginProvider implements PluginProvider<PluginConfig
 
     /** {@inheritDoc} */
     @Override public String copyright() {
-        return "";
+        return "Apache Software Foundation";
     }
 
     /** {@inheritDoc} */
@@ -125,16 +125,17 @@ public class AutoActivationPluginProvider implements PluginProvider<PluginConfig
             return;
         }
 
-        if (condition.apply(cluster.nodes())) {
+        if (condition.apply(cluster.forServers().nodes())) {
             if (logger.isInfoEnabled())
                 logger.info("Auto activation plugin set cluster state ACTIVE - activation condition meet");
 
             cluster.state(ClusterState.ACTIVE);
+
+            return;
         }
-        else {
-            if (logger.isInfoEnabled())
-                logger.info("Auto activation skipped - activation condition not meet");
-        }
+
+        if (logger.isInfoEnabled())
+            logger.info("Auto activation skipped - activation condition not meet");
     }
 
     /** {@inheritDoc} */
