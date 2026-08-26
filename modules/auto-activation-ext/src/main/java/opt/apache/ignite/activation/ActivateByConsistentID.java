@@ -50,9 +50,9 @@ public class ActivateByConsistentID implements IgnitePredicate<Collection<Cluste
             missingNodes.remove(nodeConsistentId);
 
             if (missingNodes.isEmpty())
-                break;
+                return true;
         }
 
-        return missingNodes.isEmpty();
+        return false;
     }
 }

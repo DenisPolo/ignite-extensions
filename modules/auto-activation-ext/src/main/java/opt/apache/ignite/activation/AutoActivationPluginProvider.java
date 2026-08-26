@@ -92,7 +92,7 @@ public class AutoActivationPluginProvider implements PluginProvider<PluginConfig
     }
  
     /** {@inheritDoc} */
-    @Override public CachePluginProvider createCacheProvider(CachePluginContext cpc) {
+    @Override public CachePluginProvider<?> createCacheProvider(CachePluginContext cpc) {
         return null;
     }
 
@@ -108,7 +108,6 @@ public class AutoActivationPluginProvider implements PluginProvider<PluginConfig
 
     /** {@inheritDoc} */
     @Override public void onIgniteStart() {
-
         IgniteCluster cluster = grid.cluster();
 
         if (cluster.state() == ClusterState.ACTIVE || cluster.state() == ClusterState.ACTIVE_READ_ONLY) {

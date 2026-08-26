@@ -58,9 +58,9 @@ public class ActivateByNodeAttribute implements IgnitePredicate<Collection<Clust
             missingNodes.remove(attrVal);
 
             if (missingNodes.isEmpty())
-                break;
+                return true;
         }
 
-        return missingNodes.isEmpty();
+        return false;
     }
 }
