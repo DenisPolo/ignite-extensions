@@ -18,7 +18,6 @@
 package opt.apache.ignite.activation;
 
 import java.io.Serializable;
-import java.util.Collection;
 import java.util.UUID;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCluster;
@@ -40,7 +39,7 @@ import org.apache.ignite.plugin.PluginValidationException;
  */
 public class AutoActivationPluginProvider implements PluginProvider<PluginConfiguration> {
     /** */
-    private final IgnitePredicate<Collection<ClusterNode>> condition;
+    private final IgnitePredicate<Ignite> condition;
 
     /** */
     private IgniteLogger logger;
@@ -51,7 +50,7 @@ public class AutoActivationPluginProvider implements PluginProvider<PluginConfig
     /**
      * @param condition Auto activation condition.
      */
-    public AutoActivationPluginProvider(IgnitePredicate<Collection<ClusterNode>> condition) {
+    public AutoActivationPluginProvider(IgnitePredicate<Ignite> condition) {
         if (condition == null)
             throw new IllegalArgumentException("Auto activation condition must be set");
 
@@ -82,7 +81,7 @@ public class AutoActivationPluginProvider implements PluginProvider<PluginConfig
 
     /** {@inheritDoc} */
     @Override public void initExtensions(PluginContext pc, ExtensionRegistry er) {
-        logger = pc.log(this.getClass());        
+        logger = pc.log(this.getClass());
         grid = pc.grid();
     }
 
@@ -108,6 +107,15 @@ public class AutoActivationPluginProvider implements PluginProvider<PluginConfig
 
     /** {@inheritDoc} */
     @Override public void onIgniteStart() {
+        grid.message(grid.cluster().forServers()).localListen(
+                "auto-activation-plugin-events",
+                (nodeId, message) -> {
+                    logger.info(String.valueOf(message));
+
+                    return true;
+                }
+        );
+
         IgniteCluster cluster = grid.cluster();
 
         if (cluster.state() == ClusterState.ACTIVE || cluster.state() == ClusterState.ACTIVE_READ_ONLY) {
@@ -124,17 +132,8 @@ public class AutoActivationPluginProvider implements PluginProvider<PluginConfig
             return;
         }
 
-        if (condition.apply(cluster.forServers().nodes())) {
-            if (logger.isInfoEnabled())
-                logger.info("Auto activation plugin set cluster state ACTIVE - activation condition meet");
-
+        if (condition.apply(grid))
             cluster.state(ClusterState.ACTIVE);
-
-            return;
-        }
-
-        if (logger.isInfoEnabled())
-            logger.info("Auto activation skipped - activation condition not meet");
     }
 
     /** {@inheritDoc} */
@@ -155,5 +154,10 @@ public class AutoActivationPluginProvider implements PluginProvider<PluginConfig
     /** {@inheritDoc} */
     @Override public void validateNewNode(ClusterNode cn) throws PluginValidationException {
         // No-op.
+    }
+
+    /** @return Condition. */
+    public IgnitePredicate<Ignite> getCondition() {
+        return condition;
     }
 }

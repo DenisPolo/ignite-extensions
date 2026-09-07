@@ -4,9 +4,23 @@ Apache Ignite Auto Activation plugin enables cluster activation at startup, subj
 
 The plugin skips cluster activation in the following cases:
 
-- Cluster state is either ACTIVE or ACTIVE_READ_ONLY
-- Cluster baseline topology is not empty
-- The required nodes list for cluster activation contains any client node
+- Cluster state is either ACTIVE or ACTIVE_READ_ONLY, log message:
+```text
+ [DateTime][INFO][main][AutoActivationPluginProvider] Auto activation skipped - cluster already activated
+```
+- Cluster baseline topology is not empty, log message:
+```text
+ [DateTime][INFO][main][AutoActivationPluginProvider] Auto activation skipped - baseline is not empty
+```
+- The baseline topology does not include all nodes listed for activation. A message containing the consistentIds of the missing nodes will be written to ignite.log:
+```text
+ [DateTime][INFO][main][AutoActivationPluginProvider] Auto activation skipped - activation condition not meet (by consistent ID). Missing nodes [<nideConssistentId1>, <nideConssistentId2>, ...]
+```
+- The node attributes in the topology do not contain the full list of values specified in the cluster's auto-activation settings. The log message will indicate the attribute name and list the missing values as follows:
+```text
+[DateTime][INFO][main][AutoActivationPluginProvider] Auto activation skipped - activation condition not meet (by node attribute). Attribute: <attributeName>, Missing values [<value1>, <value1>, ...]
+```
+- The required nodes list for cluster activation contains any client node. In this case, the node will simply not participate in cluster activation, and the log message will be identical to that of a missing node.
 
 Depending on how you use Ignite, you can implement an extension using one of the following methods:
 

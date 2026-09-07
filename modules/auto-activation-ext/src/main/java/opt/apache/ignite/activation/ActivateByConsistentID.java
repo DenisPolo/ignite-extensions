@@ -17,16 +17,18 @@
 
 package opt.apache.ignite.activation;
 
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import org.apache.ignite.Ignite;
+import org.apache.ignite.IgniteMessaging;
+import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.lang.IgnitePredicate;
 
 /**
  * Activate cluster when nodes with specified ConsistentID values join topology.
  */
-public class ActivateByConsistentID implements IgnitePredicate<Collection<ClusterNode>> {
+public class ActivateByConsistentID implements IgnitePredicate<Ignite> {
     /** Collection of required nodes ConsistentIDs. */
     private final Set<String> requiredNodes;
 
@@ -41,17 +43,30 @@ public class ActivateByConsistentID implements IgnitePredicate<Collection<Cluste
     }
 
     /** {@inheritDoc} */
-    @Override public boolean apply(Collection<ClusterNode> nodes) {
+    @Override public boolean apply(Ignite grid) {
         Set<String> missingNodes = new HashSet<>(requiredNodes);
+        ClusterGroup servers = grid.cluster().forServers();
+        IgniteMessaging messaging = grid.message(servers);
 
-        for (ClusterNode node : nodes) {
+        for (ClusterNode node : servers.nodes()) {
             String nodeConsistentId = node.consistentId().toString();
 
             missingNodes.remove(nodeConsistentId);
 
-            if (missingNodes.isEmpty())
+            if (missingNodes.isEmpty()) {
+                messaging.send(
+                    "auto-activation-plugin-events",
+                    "Auto activation plugin set cluster state ACTIVE - activation condition meet (by consistent ID)"
+                );
+
                 return true;
+            }
         }
+
+        messaging.send(
+            "auto-activation-plugin-events",
+            "Auto activation skipped - activation condition not meet (by consistent ID). Missing nodes " +
+                        "[" + String.join(", ", missingNodes) + "]");
 
         return false;
     }

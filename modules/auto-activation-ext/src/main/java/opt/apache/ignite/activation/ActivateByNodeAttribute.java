@@ -17,16 +17,18 @@
 
 package opt.apache.ignite.activation;
 
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import org.apache.ignite.Ignite;
+import org.apache.ignite.IgniteMessaging;
+import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.lang.IgnitePredicate;
 
 /**
  * Activate cluster when nodes with all specified attributes values join topology.
  */
-public class ActivateByNodeAttribute implements IgnitePredicate<Collection<ClusterNode>> {
+public class ActivateByNodeAttribute implements IgnitePredicate<Ignite> {
     /** Node's attribute name. */
     private final String attrName;
 
@@ -49,17 +51,31 @@ public class ActivateByNodeAttribute implements IgnitePredicate<Collection<Clust
     }
 
     /** {@inheritDoc} */
-    @Override public boolean apply(Collection<ClusterNode> nodes) {
-        Set<String> missingNodes = new HashSet<>(requiredValues);
+    @Override public boolean apply(Ignite grid) {
+        Set<String> missingValues = new HashSet<>(requiredValues);
 
-        for (ClusterNode node : nodes) {
+        ClusterGroup servers = grid.cluster().forServers();
+
+        IgniteMessaging messaging = grid.message(servers);
+
+        for (ClusterNode node : servers.nodes()) {
             String attrVal = node.attribute(attrName);
 
-            missingNodes.remove(attrVal);
+            missingValues.remove(attrVal);
 
-            if (missingNodes.isEmpty())
+            if (missingValues.isEmpty()) {
+                messaging.send(
+                    "auto-activation-plugin-events",
+                    "Auto activation plugin set cluster state ACTIVE - activation condition meet (by node attribute)"
+                );
+
                 return true;
+            }
         }
+
+        messaging.send("auto-activation-plugin-events",
+            "Auto activation skipped - activation condition not meet (by node attribute). "
+                    + "Attribute: " + attrName + ", Missing values [" + String.join(", ", missingValues) + "]");
 
         return false;
     }

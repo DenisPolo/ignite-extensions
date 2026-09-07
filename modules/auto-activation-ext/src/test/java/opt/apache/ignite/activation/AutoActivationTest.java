@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.apache.ignite.cache.CacheAtomicityMode;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.configuration.CacheConfiguration;
@@ -66,6 +67,9 @@ public class AutoActivationTest extends GridCommonAbstractTest {
             .matches("Auto activation skipped - activation condition not meet").build();
 
     /** */
+    private LogListener lsnrMissed;
+
+    /** */
     private final String NODE_0 = "node_0";
 
     /** */
@@ -75,6 +79,9 @@ public class AutoActivationTest extends GridCommonAbstractTest {
     private final String NODE_2 = "node_2";
 
     /** */
+    private final String NODE_3 = "node_3";
+
+    /** */
     private final String ATTR = "CELL";
 
     /** */
@@ -82,6 +89,9 @@ public class AutoActivationTest extends GridCommonAbstractTest {
 
     /** */
     private final String ATTR_VAL2 = "CELL_02";
+
+    /** */
+    private final String ATTR_VAL3 = "CELL_03";
 
     /** */
     private final Set<String> nodesConsistentIds = Set.of(NODE_0, NODE_1, NODE_2);
@@ -215,7 +225,7 @@ public class AutoActivationTest extends GridCommonAbstractTest {
     /** */
     @Test
     public void testActivationNotMetInMemoryClusterActivationByConsistentId() throws Exception {
-        executeTest(3, getPluginProvider(Set.of("node_3")), null, List.of("actNotMeet", "actNotMeet", "actNotMeet"));
+        executeTest(3, getPluginProvider(Set.of(NODE_3)), null, List.of("actNotMeet", "actNotMeet", "actNotMeet"));
     }
 
     /** */
@@ -280,7 +290,7 @@ public class AutoActivationTest extends GridCommonAbstractTest {
     /** */
     @Test
     public void testActivationNotMetInMemoryClusterActivationByNodeAttribute() throws Exception {
-        executeTest(3, getPluginProvider(ATTR, Set.of("CELL_03")), null,
+        executeTest(3, getPluginProvider(ATTR, Set.of(ATTR_VAL3)), null,
                 List.of("actNotMeet", "actNotMeet", "actNotMeet"));
     }
 
@@ -342,6 +352,23 @@ public class AutoActivationTest extends GridCommonAbstractTest {
     /** */
     private void executeTest(int nodesCount, PluginProvider<?> autoActivationProvider,
                              String extraCfg, List<String> assertions) throws Exception {
+        AutoActivationPluginProvider provider = (AutoActivationPluginProvider)autoActivationProvider;
+
+        log.info("Classs. " + provider.getCondition());
+        log.info("Classs. " + autoActivationProvider.copyright());
+        log.info("Classs. " + autoActivationProvider.version());
+        log.info("Classs. " + autoActivationProvider.toString());
+        Pattern missed = Pattern
+                .compile(provider.getCondition().getClass().equals(ActivateByConsistentID.class)
+                        ? "\\(by consistent ID\\)\\. " +
+                            "Missing nodes \\[(?:(?=.*" + NODE_1 + ")|(?=.*" + NODE_2 + ")|(?=.*" + NODE_3 + ")).+]"
+                        : "\\(by node attribute\\)\\. Attribute: " + ATTR + ", " +
+                            "Missing values \\[(?:(?=.*" + ATTR_VAL2 + ")|(?=.*" + ATTR_VAL3 + ")).+]");
+
+        lsnrMissed = LogListener.matches(missed).build();
+
+        listeningLog.registerListener(lsnrMissed);
+
         try (IgniteEx node0 = startGrid(getConfiguration(NODE_0, autoActivationProvider, extraCfg))) {
             assertion(node0, assertions.get(0));
 
@@ -372,6 +399,14 @@ public class AutoActivationTest extends GridCommonAbstractTest {
 
     /** */
     private void executeXmlTest(String conditionType) throws Exception {
+        lsnrMissed = LogListener
+                .matches(Pattern.compile(conditionType.equals("activate-by-consistent-ID")
+                        ? "\\(by consistent ID\\)\\. Missing nodes \\[(?:(?=.*cell-2_node-1)|(?=.*cell-1_node-2)).+]"
+                        : "\\(by node attribute\\)\\. Attribute: " + ATTR + ", Missing values \\[(?=.*CELL_2).+]"))
+                .build();
+
+        listeningLog.registerListener(lsnrMissed);
+
         try (
                 IgniteEx node0 =
                         startGrid(getConfigurationFromXml(conditionType + "/ignite-server-node1.xml"))
@@ -393,6 +428,7 @@ public class AutoActivationTest extends GridCommonAbstractTest {
         switch (assertion) {
             case "actNotMeet":
                 assertTrue(lsnrActNotMeet.check());
+                assertTrue(lsnrMissed.check());
                 assertFalse(lsnrActMeet.check());
                 assertEquals(node0.cluster().state(), INACTIVE);
                 break;
